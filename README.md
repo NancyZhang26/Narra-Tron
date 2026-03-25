@@ -49,14 +49,25 @@ Optional ML dependencies:
 uv sync --extra test --extra ml
 ```
 
-## Run the API
+## Run the dev server
+
+Start the FastAPI development server:
+
+```bash
+uv run fastapi run src/narratron/api.py --port 8000
+```
+
+Or using the custom CLI:
+
 ```bash
 uv run narra-tron serve --host 127.0.0.1 --port 8000
 ```
 
-UI console:
+Then open the UI console in your browser:
 
-Open `http://127.0.0.1:8000/` in your browser.
+```
+http://127.0.0.1:8000/
+```
 
 Health check:
 
@@ -119,6 +130,15 @@ NARRATRON_PIPER_BIN=piper
 NARRATRON_PIPER_MODEL_PATH=/absolute/path/to/voice-model.onnx
 # Optional for multi-speaker voices
 NARRATRON_PIPER_SPEAKER_ID=0
+```
+
+### Mock mode spoken audio on macOS
+
+When `NARRATRON_USE_MOCK_SERVICES=true`, Narra-Tron tries macOS `say` before falling back to a generated tone.
+If your default macOS voice returns near-empty audio, pin a voice explicitly in `.env`:
+
+```env
+NARRATRON_SYSTEM_TTS_VOICE=Samantha
 ```
 
 If performance on Raspberry Pi is limited, run selected components remotely and keep API contracts unchanged.

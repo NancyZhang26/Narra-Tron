@@ -49,6 +49,16 @@
         {% if process_result %}
         <section class="card result">
             <h3>Page Processing Result</h3>
+
+            <div class="audio-result">
+                <p class="audio-label"><strong>Generated Audio:</strong></p>
+                <audio id="audio_player" controls>
+                    <source src="{{ process_result.audio_url }}" type="audio/wav">
+                    Your browser does not support the audio element.
+                </audio>
+                <p class="audio-path"><small>File: <code>{{ process_result.audio_path }}</code></small></p>
+            </div>
+
             <label for="extracted_text_debug">Extracted Text (Debug)</label>
             <textarea id="extracted_text_debug" class="debug-text" rows="7"
                 readonly>{{ process_result.extracted_text }}</textarea>

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi import File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -22,7 +23,22 @@ from narratron.pipeline import NarraTronPipeline
 app = FastAPI(title="Narra-Tron API", version="0.1.0")
 pipeline = NarraTronPipeline.build_default()
 templates = Jinja2Templates(directory="templates")
+Path("output").mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/output", StaticFiles(directory="output"), name="output")
+
+
+def _audio_source_url(audio_path: str) -> str:
+    path = Path(audio_path)
+
+    # Absolute filesystem paths are not directly web-accessible; proxy them via endpoint.
+    if path.is_absolute():
+        return f"/ui/audio-file?path={quote(audio_path, safe='')}"
+
+    if audio_path.startswith(("http://", "https://", "/")):
+        return audio_path
+
+    return f"/{audio_path.lstrip('/')}"
 
 
 def _base_context(request: Request) -> dict[str, object]:
@@ -64,7 +80,9 @@ async def ui_process_page(
             output_audio_path=output_audio_path,
             force_real_ocr=use_real_ocr,
         )
-        ctx["process_result"] = result.model_dump()
+        payload = result.model_dump()
+        payload["audio_url"] = _audio_source_url(payload["audio_path"])
+        ctx["process_result"] = payload
     except Exception as exc:
         details = str(exc)
         if "PaddleOCR is not installed" in details:
@@ -85,6 +103,15 @@ def ui_parse_transcript(request: Request, transcript: str = Form("")) -> HTMLRes
     result = pipeline.parse_transcript(transcript=transcript)
     ctx["parse_result"] = result.model_dump()
     return templates.TemplateResponse("index.html", ctx)
+
+
+@app.get("/ui/audio-file")
+def ui_audio_file(path: str) -> FileResponse:
+    audio_path = Path(path)
+    if not audio_path.exists() or not audio_path.is_file():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    return FileResponse(str(audio_path), media_type="audio/wav")
 
 
 @app.get("/health")

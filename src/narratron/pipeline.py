@@ -27,6 +27,7 @@ class NarraTronPipeline:
                 piper_bin=settings.piper_bin,
                 piper_model_path=settings.piper_model_path,
                 piper_speaker_id=settings.piper_speaker_id,
+                system_tts_voice=settings.system_tts_voice,
             ),
             stt=STTService(
                 model_size=settings.stt_model_size, use_mock=settings.use_mock_services

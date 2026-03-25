@@ -752,6 +752,7 @@ ml = [
     { name = "faster-whisper" },
     { name = "paddleocr" },
     { name = "paddlepaddle" },
+    { name = "pillow" },
 ]
 test = [
     { name = "pytest" },
@@ -764,6 +765,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "paddleocr", marker = "extra == 'ml'", specifier = ">=2.8.0" },
     { name = "paddlepaddle", marker = "extra == 'ml'", specifier = ">=3.3.0" },
+    { name = "pillow", marker = "extra == 'ml'", specifier = ">=10.0.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
