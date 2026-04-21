@@ -1,72 +1,83 @@
 # Narra-Tron
 
-Software-first foundation for Narra-Tron: OCR -> TTS -> command parsing (STT) -> protocol signal for page turning.
+Automated book-reading robot: camera captures a page → OCR extracts text → TTS narrates it → after 2 pages, signals a Raspberry Pi Pico W to physically turn the page.
 
-This version is designed to run before hardware is available.
+## System overview
 
-## What is implemented
-- OCR service module with optional PaddleOCR backend.
-- TTS service module using Piper CLI backend (with mock fallback).
-- STT service module with optional Faster-Whisper backend.
-- Command parser for voice commands: start, stop, turn page, go back.
-- Software protocol bus that emits a turn-page signal after narration.
-- FastAPI app and CLI for local development and integration testing.
-- Local browser UI for uploading a page image and parsing command text.
+```
+Pi (this repo)                          Pico W (pi/main.py)
+──────────────────────────────          ──────────────────────
+camera.py captures page image
+  → OCR (PaddleOCR)
+  → TTS (Piper) generates audio
+  → aplay plays audio (blocking)
+  → after 2 pages:
+      TURN_PAGE ──────────────────────→ receives signal
+                                        runs roller + finger motors
+      ←───────────────────────── ACK    motors done
+  → wait for PAGE_TURNED
+      ←──────────────── PAGE_TURNED    notifies camera
+  → capture next page
+```
 
 ## Project structure
-- `src/narratron/services/ocr.py`: Image to text service.
-- `src/narratron/services/tts.py`: Piper-based text to audio service.
-- `src/narratron/services/stt.py`: Audio to text and command parsing.
-- `src/narratron/services/protocol.py`: Placeholder protocol bus for hardware commands.
-- `src/narratron/pipeline.py`: Orchestrates end-to-end software flow.
-- `src/narratron/api.py`: HTTP API endpoints.
-- `src/narratron/cli.py`: Command line interface.
-- `templates/index.html`: Browser UI for software workflows.
-- `tests/`: Unit tests for parser and pipeline behavior.
+
+```
+src/narratron/
+  pipeline.py        Orchestrates OCR → TTS per page
+  api.py             FastAPI HTTP endpoints
+  cli.py             Command-line interface
+  config.py          Settings loaded from .env
+  models.py          Pydantic data models
+  services/
+    ocr.py           PaddleOCR backend (mock available)
+    tts.py           Piper TTS backend (mock available)
+    stt.py           Faster-Whisper backend (mock available)
+    protocol.py      TCP protocol bus (software placeholder)
+pi/
+  camera.py          Runs on Pi: capture loop, audio playback, page-turn coordination
+  main.py            Runs on Pico W: motor control, WiFi listener
+  captured_images/   Runtime image output (gitignored)
+templates/           Browser UI (Jinja2)
+tests/               Unit and integration tests
+```
 
 ## Quick start
+
 1. Install uv (if not already installed):
 
 ```bash
 brew install uv
 ```
 
-2. Create `.env` from template:
+2. Create `.env` from template and fill in your values:
 
 ```bash
 cp .env.example .env
 ```
 
-3. Sync dependencies into the uv-managed environment:
+3. Sync dependencies:
 
 ```bash
 uv sync --extra test
 ```
 
-Optional ML dependencies:
+Optional ML dependencies (PaddleOCR, Faster-Whisper):
 
 ```bash
 uv sync --extra test --extra ml
 ```
 
-## Run the dev server
-
-Start the FastAPI development server:
-
-```bash
-uv run fastapi run src/narratron/api.py --port 8000
-```
-
-Or using the custom CLI:
+## Run the Narra-Tron server (Pi)
 
 ```bash
 uv run narra-tron serve --host 127.0.0.1 --port 8000
 ```
 
-Then open the UI console in your browser:
+Or via FastAPI directly:
 
-```
-http://127.0.0.1:8000/
+```bash
+uv run fastapi run src/narratron/api.py --port 8000
 ```
 
 Health check:
@@ -75,43 +86,90 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
+## Run the camera loop (Pi)
+
+This starts the full automated capture → narrate → page-turn cycle.
+
+```bash
+set -a && source .env && set +a && python pi/camera.py
+```
+
+Before running, make sure `.env` has `PICO_HOST` set to the Pico W's IP address (see below).
+
+## Configure the Pico W
+
+Open [pi/main.py](pi/main.py) and set these three values at the top:
+
+```python
+SSID = "your_wifi_network"
+PASSWORD = "your_wifi_password"
+CAMERA_HOST = "192.168.x.x"  # IP of the Pi running camera.py
+```
+
+Flash `pi/main.py` onto the Pico W using Thonny or `mpremote`. On boot it will connect to WiFi and print its IP address to the serial console — that IP is your `PICO_HOST` value for `.env`.
+
+### Getting the Pico W's IP address
+
+The Pico W prints its IP when it connects to WiFi. To read it:
+
+**Option A — Thonny (easiest):**
+1. Open Thonny, connect to the Pico W
+2. Run `pi/main.py` (or it auto-runs on boot)
+3. The Shell panel prints: `Pico IP: 192.168.x.x`
+
+**Option B — mpremote (terminal):**
+```bash
+pip install mpremote
+mpremote connect auto run pi/main.py
+# Output: Pico IP: 192.168.x.x
+```
+
+**Option C — router admin page:**
+Log into your router (usually `192.168.1.1`) and look for a device named `Pico` or `raspberrypi-pico` in the connected devices list.
+
+Once you have the IP, add it to `.env`:
+
+```env
+PICO_HOST=192.168.x.x
+```
+
+## Browser UI (development)
+
+```
+http://127.0.0.1:8000/
+```
+
+Upload a page image and test OCR + TTS without the camera loop.
+
+## API usage
+
 Process a page image:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/pipeline/process-page \
-	-H "Content-Type: application/json" \
-	-d '{"image_path":"sample_page.png","output_audio_path":"output.wav"}'
+  -H "Content-Type: application/json" \
+  -d '{"image_path":"sample_page.png","output_audio_path":"output.wav"}'
 ```
 
-Parse transcript text:
+Parse a voice transcript:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/stt/parse-transcript \
-	-H "Content-Type: application/json" \
-	-d '{"transcript":"please turn to the next page"}'
+  -H "Content-Type: application/json" \
+  -d '{"transcript":"please turn to the next page"}'
 ```
 
 ## CLI usage
-Process one page:
 
 ```bash
 uv run narra-tron process-page sample_page.png output.wav
-```
-
-Parse transcript directly:
-
-```bash
 uv run narra-tron parse-transcript "stop reading"
-```
-
-Transcribe audio command and parse:
-
-```bash
 uv run narra-tron transcribe-command command.wav
 ```
 
 ## Enabling real ML backends
-By default, mock mode is enabled to avoid blocking development.
+
+By default, mock mode is on so development works without hardware.
 
 1. Install ML dependencies:
 
@@ -125,25 +183,20 @@ uv sync --extra ml
 
 ```env
 NARRATRON_USE_MOCK_SERVICES=false
-NARRATRON_STT_MODEL_SIZE=tiny
 NARRATRON_PIPER_BIN=piper
 NARRATRON_PIPER_MODEL_PATH=/absolute/path/to/voice-model.onnx
-# Optional for multi-speaker voices
-NARRATRON_PIPER_SPEAKER_ID=0
 ```
 
 ### Mock mode spoken audio on macOS
 
-When `NARRATRON_USE_MOCK_SERVICES=true`, Narra-Tron tries macOS `say` before falling back to a generated tone.
-If your default macOS voice returns near-empty audio, pin a voice explicitly in `.env`:
+When `NARRATRON_USE_MOCK_SERVICES=true`, Narra-Tron tries macOS `say` before falling back to a generated tone. Pin a voice explicitly if needed:
 
 ```env
 NARRATRON_SYSTEM_TTS_VOICE=Samantha
 ```
 
-If performance on Raspberry Pi is limited, run selected components remotely and keep API contracts unchanged.
-
 ## Run tests
+
 ```bash
 uv run pytest
 ```

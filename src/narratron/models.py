@@ -34,7 +34,8 @@ class PageProcessRequest(BaseModel):
 class PageProcessResult(BaseModel):
     extracted_text: str
     audio_path: str
-    page_turn_signal: str
+    # Only populated on every 2nd page (both pages of an open book narrated).
+    page_turn_signal: str | None = None
 
 
 class TranscribeRequest(BaseModel):

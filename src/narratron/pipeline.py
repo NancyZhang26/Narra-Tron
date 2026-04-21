@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from narratron.config import settings
 from narratron.models import CommandResult, CommandType, PageProcessResult
 from narratron.services.ocr import OCRService
-from narratron.services.protocol import SoftwareProtocolBus
 from narratron.services.stt import CommandParser, STTService
 from narratron.services.tts import TTSService
 
@@ -16,7 +15,6 @@ class NarraTronPipeline:
     tts: TTSService
     stt: STTService
     parser: CommandParser
-    protocol_bus: SoftwareProtocolBus
 
     @classmethod
     def build_default(cls) -> "NarraTronPipeline":
@@ -33,7 +31,6 @@ class NarraTronPipeline:
                 model_size=settings.stt_model_size, use_mock=settings.use_mock_services
             ),
             parser=CommandParser(),
-            protocol_bus=SoftwareProtocolBus(),
         )
 
     def process_page(
@@ -48,13 +45,10 @@ class NarraTronPipeline:
             text = self.ocr.extract_text(image_path)
 
         audio_path = self.tts.synthesize(text=text, output_audio_path=output_audio_path)
-        signal = self.protocol_bus.emit_turn_page(
-            source="tts", reason="page narration complete"
-        )
+
         return PageProcessResult(
             extracted_text=text,
             audio_path=audio_path,
-            page_turn_signal=f"TURN_PAGE::{signal.timestamp_iso}",
         )
 
     def transcribe_command(self, audio_path: str) -> CommandResult:

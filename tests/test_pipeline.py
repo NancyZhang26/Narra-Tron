@@ -14,7 +14,7 @@ def test_process_page_mock_pipeline(tmp_path: Path) -> None:
 
     assert result.extracted_text.startswith("[MOCK OCR]")
     assert output_audio_path.exists()
-    assert result.page_turn_signal.startswith("TURN_PAGE::")
+    assert result.page_turn_signal is None
 
 
 def test_parse_transcript_pipeline() -> None:
