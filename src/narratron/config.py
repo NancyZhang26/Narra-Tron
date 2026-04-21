@@ -21,6 +21,8 @@ class Settings:
     system_tts_voice: str = os.getenv("NARRATRON_SYSTEM_TTS_VOICE", "")
     host: str = os.getenv("NARRATRON_HOST", "127.0.0.1")
     port: int = int(os.getenv("NARRATRON_PORT", "8000"))
+    pi_host: str = os.getenv("NARRATRON_PI_HOST", "")
+    pi_port: int = int(os.getenv("NARRATRON_PI_PORT", "9999"))
 
 
 settings = Settings()

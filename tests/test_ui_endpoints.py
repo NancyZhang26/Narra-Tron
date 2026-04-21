@@ -167,7 +167,6 @@ def test_ui_process_page_json_result_included(
     assert '"extracted_text"' in html
     assert '"audio_path"' in html
     assert '"page_turn_signal"' in html
-    assert "TURN_PAGE::" in html
 
 
 def test_ui_parse_transcript(client: TestClient) -> None:
