@@ -11,7 +11,9 @@ from picamera2 import Picamera2
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from Speaker_Code.speaker import Speaker
 
-CAPTURED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captured_images")
+CAPTURED_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "captured_images"
+)
 NARRATRON_API = os.environ.get("NARRATRON_API", "http://127.0.0.1:8000")
 PICO_HOST = os.environ.get("PICO_HOST", "")
 PICO_PORT = int(os.environ.get("PICO_PORT", "9999"))
@@ -46,7 +48,9 @@ def submit_to_pipeline(image_path):
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        raise RuntimeError(f"Failed to submit page to Narra-Tron API at {NARRATRON_API}: {e}")
+        raise RuntimeError(
+            f"Failed to submit page to Narra-Tron API at {NARRATRON_API}: {e}"
+        )
 
 
 def capture_and_narrate(speaker: Speaker) -> bool:
@@ -84,7 +88,9 @@ def send_turn_page_to_pico():
             "check that the Pico is powered on and connected to WiFi"
         )
     except OSError as e:
-        raise RuntimeError(f"Could not reach Pico at {PICO_HOST}:{PICO_PORT}: {e}")
+        raise RuntimeError(
+            f"ERROR: Could not reach Pico at {PICO_HOST}:{PICO_PORT}: {e}"
+        )
 
 
 def wait_for_page_turned(srv):
@@ -93,7 +99,16 @@ def wait_for_page_turned(srv):
     conn, addr = srv.accept()
     with conn:
         conn.recv(1024)
-        conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK")
+        # Send a complete HTTP response so MicroPython's urequests client
+        # can reliably read the status and finish the request cleanly.
+        conn.sendall(
+            b"HTTP/1.1 200 OK\r\n"
+            b"Content-Type: text/plain\r\n"
+            b"Content-Length: 2\r\n"
+            b"Connection: close\r\n"
+            b"\r\n"
+            b"OK"
+        )
     print(f"PAGE_TURNED received from {addr[0]}")
 
 

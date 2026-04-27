@@ -13,7 +13,7 @@ finger.freq(5000)
 
 SSID = "YOUR_WIFI"
 PASSWORD = "YOUR_PASS"
-CAMERA_HOST = "YOUR_PI_CAMERA_IP"  # IP of the Pi running camera.py
+CAMERA_HOST = "172.20.10.3"  # IP of the Pi running camera.py
 CAMERA_PORT = 9998
 
 
