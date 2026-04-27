@@ -11,9 +11,9 @@ finger = PWM(Pin(18))
 roller.freq(10000)
 finger.freq(5000)
 
-SSID = "YOUR_WIFI"
-PASSWORD = "YOUR_PASS"
-CAMERA_HOST = "172.20.10.3"  # IP of the Pi running camera.py
+SSID = "nancy"
+# PASSWORD = "YOUR_PASS"
+CAMERA_HOST = "YOUR_PI_CAMERA_IP"  # IP of the Pi running camera.py
 CAMERA_PORT = 9998
 
 
@@ -50,8 +50,8 @@ def notify_camera():
 
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
-wlan.config(pm=0xa11140)
-wlan.connect(SSID, PASSWORD)
+wlan.config(pm=0xA11140)
+wlan.connect(SSID)  # , PASSWORD)
 while not wlan.isconnected():
     time.sleep(1)
 
@@ -71,7 +71,9 @@ while True:
         print("TURN_PAGE received from", addr[0])
         turn_page()
         cl.send(b"ACK\n")
-        time.sleep_ms(200)  # let TCP flush before close; immediate close can RST before ACK arrives
+        time.sleep_ms(
+            200
+        )  # let TCP flush before close; immediate close can RST before ACK arrives
         cl.close()
         notify_camera()  # notify camera only after a real page turn
     else:
