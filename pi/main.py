@@ -70,9 +70,12 @@ while True:
     if b"TURN_PAGE" in request:
         print("TURN_PAGE received from", addr[0])
         turn_page()
-        cl.send(b"ACK\n")  # ACK only after motors have finished
+        cl.send(b"ACK\n")
+        time.sleep_ms(200)  # let TCP flush before close; immediate close can RST before ACK arrives
+        cl.close()
+        notify_camera()  # notify camera only after a real page turn
     else:
         print(f"ERROR: unknown signal from {addr[0]}: {request[:32]!r}")
         cl.send(b"UNKNOWN\n")
-    cl.close()
-    notify_camera()
+        cl.close()
+        # do NOT notify camera — no page was turned

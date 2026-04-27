@@ -44,14 +44,25 @@ class SoftwareProtocolBus:
         return signal
 
     def _send_to_pi(self, signal: TurnPageSignal) -> None:
-        """Open a short-lived TCP connection and fire the turn-page command."""
+        """Open a short-lived TCP connection, fire the turn-page command, and
+        wait for the Pico's ACK (sent only after motors have finished)."""
         try:
             with socket.create_connection(
                 (self.pi_host, self.pi_port), timeout=5
             ) as sock:
                 sock.sendall(TURN_PAGE_CMD)
+                sock.settimeout(10)  # motors take ~1.4 s; 10 s is generous
+                ack = sock.recv(64)
+                if b"ACK" not in ack:
+                    logger.warning(
+                        "Expected ACK from Pico at %s:%d, got: %r",
+                        self.pi_host,
+                        self.pi_port,
+                        ack,
+                    )
+                    return
             logger.info(
-                "TURN_PAGE sent to Pi at %s:%d at %s",
+                "TURN_PAGE acknowledged by Pico at %s:%d at %s",
                 self.pi_host,
                 self.pi_port,
                 signal.timestamp_iso,
@@ -59,7 +70,7 @@ class SoftwareProtocolBus:
         except OSError as exc:
             # Log but don't crash — a missed page turn is recoverable.
             logger.error(
-                "Failed to send TURN_PAGE to Pi at %s:%d: %s",
+                "Failed to send TURN_PAGE to Pico at %s:%d: %s",
                 self.pi_host,
                 self.pi_port,
                 exc,
