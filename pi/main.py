@@ -13,20 +13,20 @@ finger.freq(5000)
 
 SSID = "nancy"
 # PASSWORD = "YOUR_PASS"
-CAMERA_HOST = "YOUR_PI_CAMERA_IP"  # IP of the Pi running camera.py
+CAMERA_HOST = "10.42.0.1"  # IP of the Pi running camera.py
 CAMERA_PORT = 9998
 
 
 def spin_roller():
     roller.duty_u16(65535)
-    time.sleep(1)
+    time.sleep(.21)
     roller.duty_u16(0)
     print("roller finished")
 
 
 def spin_finger():
     finger.duty_u16(5000)
-    time.sleep(0.4)
+    time.sleep(1)
     finger.duty_u16(0)
     print("finger finished")
 
@@ -47,37 +47,42 @@ def notify_camera():
     except Exception as e:
         print(f"ERROR: failed to notify camera at {CAMERA_HOST}:{CAMERA_PORT}: {e}")
 
+def run():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.config(pm=0xA11140)
+    wlan.connect(SSID)  # , PASSWORD)
+    while not wlan.isconnected():
+        print(f"{wlan.status()=}")
+        time.sleep(1)
 
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-wlan.config(pm=0xA11140)
-wlan.connect(SSID)  # , PASSWORD)
-while not wlan.isconnected():
-    time.sleep(1)
+    print("Pico IP:", wlan.ifconfig()[0])
 
-print("Pico IP:", wlan.ifconfig()[0])
+    addr = socket.getaddrinfo("0.0.0.0", 9999)[0][-1]
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(addr)
+    s.listen(1)
+    print("Listening for TURN_PAGE signal on port 9999...")
 
-addr = socket.getaddrinfo("0.0.0.0", 9999)[0][-1]
-s = socket.socket()
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(addr)
-s.listen(1)
-print("Listening for TURN_PAGE signal on port 9999...")
+    while True:
+        cl, addr = s.accept()
+        request = cl.recv(1024)
+        if b"TURN_PAGE" in request:
+            print("TURN_PAGE received from", addr[0])
+            turn_page()
+            cl.send(b"ACK\n")
+            time.sleep_ms(
+                200
+            )  # let TCP flush before close; immediate close can RST before ACK arrives
+            cl.close()
+            notify_camera()  # notify camera only after a real page turn
+        else:
+            print(f"ERROR: unknown signal from {addr[0]}: {request[:32]!r}")
+            cl.send(b"UNKNOWN\n")
+            cl.close()
+            # do NOT notify camera — no page was turned
 
-while True:
-    cl, addr = s.accept()
-    request = cl.recv(1024)
-    if b"TURN_PAGE" in request:
-        print("TURN_PAGE received from", addr[0])
-        turn_page()
-        cl.send(b"ACK\n")
-        time.sleep_ms(
-            200
-        )  # let TCP flush before close; immediate close can RST before ACK arrives
-        cl.close()
-        notify_camera()  # notify camera only after a real page turn
-    else:
-        print(f"ERROR: unknown signal from {addr[0]}: {request[:32]!r}")
-        cl.send(b"UNKNOWN\n")
-        cl.close()
-        # do NOT notify camera — no page was turned
+
+run()
+# turn_page()
