@@ -11,18 +11,31 @@ from picamera2 import Picamera2
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from Speaker_Code.speaker import Speaker
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CAPTURED_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "captured_images"
 )
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 NARRATRON_API = os.environ.get("NARRATRON_API", "http://127.0.0.1:8000")
 PICO_HOST = os.environ.get("PICO_HOST", "")
 PICO_PORT = int(os.environ.get("PICO_PORT", "9999"))
 CAMERA_PORT = int(os.environ.get("CAMERA_PORT", "9998"))
 PAGES_PER_SPREAD = int(os.environ.get("PAGES_PER_SPREAD", "1"))
+PAGE_HALF = os.environ.get("PAGE_HALF", "left")
+AUDIO_DEVICE = os.environ.get("AUDIO_DEVICE", "plughw:2,0")
 
 os.makedirs(CAPTURED_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+try:
+    requests.post(f"{NARRATRON_API}/camera/release", timeout=5)
+    print("Released preview camera from API server.")
+except Exception as e:
+    print(f"Warning: could not release camera from API server: {e}")
 
 picam2 = Picamera2()
+config = picam2.create_still_configuration(main={"size": (4608, 2592)})
+picam2.configure(config)
 picam2.start()
 time.sleep(2)  # warm-up
 
@@ -41,7 +54,9 @@ def submit_to_pipeline(image_path):
             f"{NARRATRON_API}/v1/pipeline/process-page",
             json={
                 "image_path": image_path,
-                "output_audio_path": f"output/page_{os.path.basename(image_path)}.wav",
+                "output_audio_path": os.path.join(OUTPUT_DIR, f"page_{os.path.basename(image_path)}.wav"),
+                "output_text_path": os.path.join(OUTPUT_DIR, "text", f"page_{os.path.basename(image_path)}.txt"),
+                "half": PAGE_HALF,
             },
             timeout=30,
         )
@@ -53,21 +68,21 @@ def submit_to_pipeline(image_path):
         )
 
 
-def capture_and_narrate(speaker: Speaker) -> bool:
-    """Capture a page image, OCR it, synthesise speech, and play it.
+def capture_and_narrate(speaker: Speaker) -> None:
+    """Capture → OCR → TTS → play, then return.
 
-    Returns False when the page is blank (end-of-book signal), True otherwise.
-    Playback blocks until audio finishes — this is the implicit lock that
-    prevents a page-flip signal from being sent while narration is running.
+    Blocks until audio playback is fully complete.  The page turner must not
+    be signalled until this function returns.  On OCR failure the synthesised
+    error message is played so the listener always hears feedback.
     """
     path = capture()
     result = submit_to_pipeline(path)
-    text = result.get("extracted_text", "")
-    if not text.strip():
-        print("Empty page detected — end of book.")
-        return False
-    speaker.play(result.get("audio_path", ""))
-    return True
+    audio_path = result.get("audio_path", "")
+    if not result.get("ocr_success", True):
+        print("OCR returned no text — narrating error message.")
+    # Play immediately once the WAV is available; blocks until finished.
+    print(audio_path)
+    speaker.play(audio_path)
 
 
 def send_turn_page_to_pico():
@@ -112,30 +127,26 @@ def wait_for_page_turned(srv):
     print(f"PAGE_TURNED received from {addr[0]}")
 
 
-speaker = Speaker()
+speaker = Speaker(device=AUDIO_DEVICE)
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(("0.0.0.0", CAMERA_PORT))
     srv.listen(1)
     print(f"Camera server listening on port {CAMERA_PORT}")
-    end_of_book = False
-    # Main loop: wait for Pico's page-turn confirmation, capture the next
-    # spread, then signal the next turn. Exits cleanly on an empty page.
-    while not end_of_book:
+    while True:
         try:
             time.sleep(0.5)  # mechanical settle after page turn
             for _ in range(PAGES_PER_SPREAD):
-                res = capture_and_narrate(speaker)
-                print(res)
-                if not res:
-                    end_of_book = True
-                    break
-            if not end_of_book:
-                send_turn_page_to_pico()
+                # 1. Narrate page (blocks until speaker finishes).
+                capture_and_narrate(speaker)
+            # 2. Only reached after all narration is complete.
+            send_turn_page_to_pico()
+            # 3. Wait for the physical page turn to finish before looping.
+            wait_for_page_turned(srv)
         except RuntimeError as e:
             print(f"ERROR: {e}")
-        wait_for_page_turned(srv)
 
-    print("Book complete — shutting down.")
+    print("Shutting down.")
     picam2.stop()
+    sys.exit(0)

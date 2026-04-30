@@ -13,7 +13,7 @@ from fastapi import File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 
 from narratron.models import (
     CommandResult,
@@ -73,15 +73,18 @@ async def ui_process_page(
         return templates.TemplateResponse("index.html", ctx)
 
     suffix = Path(page_image.filename).suffix or ".png"
-    tmp_dir = Path(tempfile.gettempdir()) / "narra-tron-ui"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    saved_path = tmp_dir / f"{uuid4().hex}{suffix}"
+    output_dir = Path("output")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    run_id = uuid4().hex
+    saved_path = output_dir / f"{run_id}{suffix}"
     saved_path.write_bytes(await page_image.read())
+    text_path = str(output_dir / "text" / f"{run_id}.txt")
 
     try:
         result = pipeline.process_page(
             image_path=str(saved_path),
             output_audio_path=output_audio_path,
+            output_text_path=text_path,
             force_real_ocr=use_real_ocr,
         )
         payload = result.model_dump()
@@ -118,9 +121,11 @@ async def ui_capture_and_ocr(
     ctx = _base_context(request)
     try:
         saved_path = _capture_full_res_image(half)
+        text_path = str(Path("output") / "text" / f"{saved_path.stem}.txt")
         result = pipeline.process_page(
             image_path=str(saved_path),
             output_audio_path=output_audio_path,
+            output_text_path=text_path,
             force_real_ocr=True,
         )
         payload = result.model_dump()
@@ -145,11 +150,41 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _preprocess_image(image_path: str, half: str | None) -> str:
+    """Rotate 180°, crop to half, then enhance for OCR. Returns path to processed image."""
+    img = Image.open(image_path)
+    img = img.rotate(180)
+
+    if half is not None:
+        w, h = img.size
+        if half == "left":
+            img = img.crop((0, 0, w // 2, h))
+        else:
+            img = img.crop((w // 2, 0, w, h))
+
+    # Grayscale removes colour noise that confuses tesseract.
+    img = img.convert("L")
+    # Boost contrast so faint ink stands out from the page.
+    img = ImageEnhance.Contrast(img).enhance(2.0)
+    # Sharpen to recover edge detail lost to blur.
+    img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+
+    tmp_dir = Path(tempfile.gettempdir()) / "narra-tron-ui"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    out_path = tmp_dir / f"{uuid4().hex}.png"
+    img.save(str(out_path))
+    return str(out_path)
+
+
 @app.post("/v1/pipeline/process-page", response_model=PageProcessResult)
 def process_page(req: PageProcessRequest) -> PageProcessResult:
     try:
+        image_path = _preprocess_image(req.image_path, req.half)
         return pipeline.process_page(
-            image_path=req.image_path, output_audio_path=req.output_audio_path, force_real_ocr=True
+            image_path=image_path,
+            output_audio_path=req.output_audio_path,
+            output_text_path=req.output_text_path,
+            force_real_ocr=True,
         )
     except FileNotFoundError as exc:
         print(f"File not found during page processing: {exc}")
@@ -219,9 +254,9 @@ def _capture_full_res_image(half: str) -> Path:
         cam.start()
         time.sleep(0.5)
 
-        tmp_dir = Path(tempfile.gettempdir()) / "narra-tron-ui"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        raw_path = tmp_dir / f"{uuid4().hex}_raw.jpg"
+        output_dir = Path("output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = output_dir / f"{uuid4().hex}_raw.jpg"
         cam.capture_file(str(raw_path))
         cam.stop()
         cam.close()
@@ -235,7 +270,7 @@ def _capture_full_res_image(half: str) -> Path:
     else:
         img = img.crop((w // 2, 0, w, h))
 
-    out_path = tmp_dir / f"{uuid4().hex}.jpg"
+    out_path = Path("output") / f"{uuid4().hex}.jpg"
     img.save(str(out_path), quality=95)
     return out_path
 
@@ -252,6 +287,21 @@ def _mjpeg_frames():
             b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
         )
         time.sleep(0.2)  # 5 fps
+
+
+@app.post("/camera/release")
+def camera_release() -> dict[str, str]:
+    """Stop and release the preview camera so an external process can acquire it."""
+    global _camera
+    with _camera_lock:
+        if _camera is not None:
+            try:
+                _camera.stop()
+                _camera.close()
+            except Exception:
+                pass
+            _camera = None
+    return {"status": "released"}
 
 
 @app.get("/camera/stream")
