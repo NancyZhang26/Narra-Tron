@@ -20,8 +20,6 @@ NARRATRON_API = os.environ.get("NARRATRON_API", "http://127.0.0.1:8000")
 PICO_HOST = os.environ.get("PICO_HOST", "")
 PICO_PORT = int(os.environ.get("PICO_PORT", "9999"))
 CAMERA_PORT = int(os.environ.get("CAMERA_PORT", "9998"))
-PAGES_PER_SPREAD = int(os.environ.get("PAGES_PER_SPREAD", "1"))
-PAGE_HALF = os.environ.get("PAGE_HALF", "left")
 AUDIO_DEVICE = os.environ.get("AUDIO_DEVICE", "plughw:2,0")
 
 os.makedirs(CAPTURED_DIR, exist_ok=True)
@@ -48,15 +46,16 @@ def capture():
     return path
 
 
-def submit_to_pipeline(image_path):
+def submit_to_pipeline(image_path, half):
+    base = os.path.basename(image_path)
     try:
         response = requests.post(
             f"{NARRATRON_API}/v1/pipeline/process-page",
             json={
                 "image_path": image_path,
-                "output_audio_path": os.path.join(OUTPUT_DIR, f"page_{os.path.basename(image_path)}.wav"),
-                "output_text_path": os.path.join(OUTPUT_DIR, "text", f"page_{os.path.basename(image_path)}.txt"),
-                "half": PAGE_HALF,
+                "output_audio_path": os.path.join(OUTPUT_DIR, f"page_{base}_{half}.wav"),
+                "output_text_path": os.path.join(OUTPUT_DIR, "text", f"page_{base}_{half}.txt"),
+                "half": half,
             },
             timeout=30,
         )
@@ -69,20 +68,18 @@ def submit_to_pipeline(image_path):
 
 
 def capture_and_narrate(speaker: Speaker) -> None:
-    """Capture → OCR → TTS → play, then return.
+    """Capture one spread, then narrate left page then right page.
 
-    Blocks until audio playback is fully complete.  The page turner must not
-    be signalled until this function returns.  On OCR failure the synthesised
-    error message is played so the listener always hears feedback.
+    A single image is captured and submitted twice — once cropped to the left
+    half, once to the right — so both pages are read before the page turner
+    is signalled.  Each play() call blocks until that page's audio finishes.
     """
     path = capture()
-    result = submit_to_pipeline(path)
-    audio_path = result.get("audio_path", "")
-    if not result.get("ocr_success", True):
-        print("OCR returned no text — narrating error message.")
-    # Play immediately once the WAV is available; blocks until finished.
-    print(audio_path)
-    speaker.play(audio_path)
+    for half in ("left", "right"):
+        result = submit_to_pipeline(path, half=half)
+        if not result.get("ocr_success", True):
+            print(f"OCR returned no text for {half} page — narrating error message.")
+        speaker.play(result.get("audio_path", ""))
 
 
 def send_turn_page_to_pico():
@@ -137,12 +134,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
     while True:
         try:
             time.sleep(0.5)  # mechanical settle after page turn
-            for _ in range(PAGES_PER_SPREAD):
-                # 1. Narrate page (blocks until speaker finishes).
-                capture_and_narrate(speaker)
-            # 2. Only reached after all narration is complete.
+            # 1. Narrate left then right page (both block until audio finishes).
+            capture_and_narrate(speaker)
+            # 2. Only reached after both pages are fully narrated.
             send_turn_page_to_pico()
-            # 3. Wait for the physical page turn to finish before looping.
+            # 3. Wait for the physical page turn before looping.
             wait_for_page_turned(srv)
         except RuntimeError as e:
             print(f"ERROR: {e}")
