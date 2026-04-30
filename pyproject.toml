@@ -15,6 +15,10 @@ dependencies = [
   "python-dotenv>=1.1.0",
   "python-multipart>=0.0.20",
   "jinja2>=3.1.0",
+  "pytesseract>=0.3.13",
+  "pillow>=12.1.1",
+  "requests>=2.32.5",
+  "picamera2>=0.3.35",
 ]
 
 [project.optional-dependencies]

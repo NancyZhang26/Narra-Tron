@@ -20,6 +20,22 @@
         <section class="card error">{{ error }}</section>
         {% endif %}
 
+        <section class="card camera-preview">
+            <h2>Camera Preview <small>(5 fps — for orientation)</small></h2>
+            <img src="/camera/stream" alt="Live camera feed" id="camera-img" />
+            <p class="camera-note">Stream pauses during capture. Captures full resolution, rotated 180°.</p>
+            <div class="camera-capture-row">
+                <form method="post" action="/ui/capture-and-ocr">
+                    <input type="hidden" name="half" value="left" />
+                    <button type="submit" class="btn-capture">OCR Left Page</button>
+                </form>
+                <form method="post" action="/ui/capture-and-ocr">
+                    <input type="hidden" name="half" value="right" />
+                    <button type="submit" class="btn-capture">OCR Right Page</button>
+                </form>
+            </div>
+        </section>
+
         <section class="grid">
             <form class="card" action="/ui/process-page" method="post" enctype="multipart/form-data">
                 <h2>Process Page</h2>

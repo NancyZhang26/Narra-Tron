@@ -37,8 +37,9 @@ class NarraTronPipeline:
         self,
         image_path: str,
         output_audio_path: str,
-        force_real_ocr: bool = False,
+        force_real_ocr: bool = True,
     ) -> PageProcessResult:
+        print("using ocr", force_real_ocr)
         if force_real_ocr:
             text = OCRService(use_mock=False).extract_text(image_path)
         else:

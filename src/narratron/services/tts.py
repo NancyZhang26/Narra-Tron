@@ -15,7 +15,7 @@ class PiperTTSConfigError(RuntimeError):
 class TTSService:
     def __init__(
         self,
-        use_mock: bool = True,
+        use_mock: bool = False,
         piper_bin: str = "piper",
         piper_model_path: str = "",
         piper_speaker_id: str = "",
@@ -48,15 +48,19 @@ class TTSService:
 
     def _synthesize_with_piper(self, text: str, output_audio_path: str) -> None:
         cmd = self._build_cmd(output_audio_path)
+        print("Running Piper TTS with command:", " ".join(cmd))
+        print("Input text:", repr(text))
 
         try:
-            subprocess.run(
+            result = subprocess.run(
                 cmd,
                 input=text,
                 text=True,
                 check=True,
                 capture_output=True,
             )
+            print("Piper stdout:", repr(result.stdout))
+            print("Piper stderr:", repr(result.stderr))
         except FileNotFoundError as exc:
             raise PiperTTSConfigError(
                 "Piper binary not found. Install Piper and/or set NARRATRON_PIPER_BIN to its executable path."

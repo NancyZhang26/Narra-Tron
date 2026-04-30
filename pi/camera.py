@@ -75,7 +75,7 @@ def send_turn_page_to_pico():
         print("PICO_HOST not set — skipping TURN_PAGE signal")
         return
     try:
-        with socket.create_connection((PICO_HOST, PICO_PORT), timeout=5) as sock:
+        with socket.create_connection((PICO_HOST, PICO_PORT), timeout=18000) as sock:
             sock.sendall(b"TURN_PAGE\n")
             sock.settimeout(10)  # motors take ~1.4 s; 10 s is generous
             ack = sock.recv(64)
@@ -119,33 +119,23 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
     srv.bind(("0.0.0.0", CAMERA_PORT))
     srv.listen(1)
     print(f"Camera server listening on port {CAMERA_PORT}")
-
-    # Startup: capture the first spread without waiting for a page-turn signal.
     end_of_book = False
-    try:
-        for _ in range(PAGES_PER_SPREAD):
-            if not capture_and_narrate(speaker):
-                end_of_book = True
-                break
-        if not end_of_book:
-            send_turn_page_to_pico()
-    except RuntimeError as e:
-        print(f"ERROR during startup: {e}")
-
     # Main loop: wait for Pico's page-turn confirmation, capture the next
     # spread, then signal the next turn. Exits cleanly on an empty page.
     while not end_of_book:
         try:
-            wait_for_page_turned(srv)
             time.sleep(0.5)  # mechanical settle after page turn
             for _ in range(PAGES_PER_SPREAD):
-                if not capture_and_narrate(speaker):
+                res = capture_and_narrate(speaker)
+                print(res)
+                if not res:
                     end_of_book = True
                     break
             if not end_of_book:
                 send_turn_page_to_pico()
         except RuntimeError as e:
             print(f"ERROR: {e}")
+        wait_for_page_turned(srv)
 
     print("Book complete — shutting down.")
     picam2.stop()

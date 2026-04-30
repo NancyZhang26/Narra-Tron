@@ -180,3 +180,32 @@ audio {
         margin-top: 1.2rem;
     }
 }
+.camera-preview #camera-img {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: #111;
+}
+
+.camera-note {
+    margin: 0.6rem 0 0 0;
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.camera-capture-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+}
+
+.camera-capture-row form {
+    flex: 1;
+}
+
+.btn-capture {
+    margin-top: 0;
+    background: linear-gradient(120deg, var(--accent-2), #c04a2a);
+}
