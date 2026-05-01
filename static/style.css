@@ -209,3 +209,32 @@ audio {
     margin-top: 0;
     background: linear-gradient(120deg, var(--accent-2), #c04a2a);
 }
+
+.book-btn-row {
+    display: flex;
+    gap: 0.8rem;
+    margin-top: 1rem;
+}
+
+.btn-start-book {
+    flex: 2;
+    font-size: 1.2rem;
+    padding: 0.9rem 1.4rem;
+    margin-top: 0;
+    background: linear-gradient(120deg, #2a7d4f, #1a5c38);
+}
+
+.btn-stop-book {
+    flex: 1;
+    font-size: 1.1rem;
+    padding: 0.9rem 1rem;
+    margin-top: 0;
+    background: linear-gradient(120deg, #7d2a2a, #5c1a1a);
+}
+
+.book-status {
+    margin-top: 0.7rem;
+    font-size: 0.85rem;
+    opacity: 0.75;
+    min-height: 1.2em;
+}

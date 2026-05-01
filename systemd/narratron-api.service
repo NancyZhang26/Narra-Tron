@@ -1,0 +1,19 @@
+[Unit]
+Description=Narra-Tron FastAPI Server
+After=network.target narratron-hotspot.service
+Wants=narratron-hotspot.service
+
+[Service]
+Type=simple
+User=pgarb
+WorkingDirectory=/home/pgarb/Narra-Tron
+EnvironmentFile=/home/pgarb/Narra-Tron/.env
+ExecStart=/home/pgarb/.local/bin/uv run narra-tron serve --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=narratron-api
+
+[Install]
+WantedBy=multi-user.target

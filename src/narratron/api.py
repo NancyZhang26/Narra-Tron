@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import os
+import subprocess
 import tempfile
 import threading
 import time
@@ -302,6 +304,62 @@ def camera_release() -> dict[str, str]:
                 pass
             _camera = None
     return {"status": "released"}
+
+
+_book_process: subprocess.Popen | None = None
+
+
+@app.post("/book/start")
+def book_start() -> dict[str, str]:
+    """Release the preview camera then launch pi/camera.py as a background process."""
+    global _camera, _book_process
+
+    # Stop any already-running book process.
+    if _book_process is not None and _book_process.poll() is None:
+        _book_process.terminate()
+        try:
+            _book_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _book_process.kill()
+        _book_process = None
+
+    # Release the preview camera before camera.py tries to acquire it.
+    with _camera_lock:
+        if _camera is not None:
+            try:
+                _camera.stop()
+                _camera.close()
+            except Exception:
+                pass
+            _camera = None
+
+    project_root = Path(__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env_file = project_root / ".env"
+    if env_file.exists():
+        from dotenv import dotenv_values
+        env.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
+
+    _book_process = subprocess.Popen(
+        ["python", str(project_root / "pi" / "camera.py")],
+        env=env,
+        cwd=str(project_root),
+    )
+    return {"status": "started", "pid": str(_book_process.pid)}
+
+
+@app.post("/book/stop")
+def book_stop() -> dict[str, str]:
+    global _book_process
+    if _book_process is None or _book_process.poll() is not None:
+        return {"status": "not_running"}
+    _book_process.terminate()
+    try:
+        _book_process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        _book_process.kill()
+    _book_process = None
+    return {"status": "stopped"}
 
 
 @app.get("/camera/stream")

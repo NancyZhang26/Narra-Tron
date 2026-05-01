@@ -1,0 +1,24 @@
+[Unit]
+Description=Narra-Tron WiFi Hotspot (nancy)
+After=NetworkManager.service
+Wants=NetworkManager.service
+# Camera and API must not start until the hotspot is confirmed up
+Before=narratron-api.service narratron-camera.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Retry up to 30 times (60 s) in case NM needs a moment after boot
+ExecStart=/bin/bash -c \
+  'for i in $(seq 1 30); do \
+     /usr/bin/nmcli con up nancy && exit 0; \
+     echo "Waiting for NetworkManager to be ready... (attempt $i/30)"; \
+     sleep 2; \
+   done; \
+   echo "ERROR: could not bring up hotspot after 60 s"; exit 1'
+ExecStop=/usr/bin/nmcli con down nancy
+# Run as root — nmcli con up requires privilege
+User=root
+
+[Install]
+WantedBy=multi-user.target

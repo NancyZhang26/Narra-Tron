@@ -1,0 +1,19 @@
+[Unit]
+Description=Narra-Tron Camera + Page-Turner Loop
+After=network.target narratron-hotspot.service narratron-api.service
+Wants=narratron-hotspot.service narratron-api.service
+
+[Service]
+Type=simple
+User=pgarb
+WorkingDirectory=/home/pgarb/Narra-Tron
+EnvironmentFile=/home/pgarb/Narra-Tron/.env
+ExecStart=/home/pgarb/Narra-Tron/.venv/bin/python pi/camera.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=narratron-camera
+
+[Install]
+WantedBy=multi-user.target

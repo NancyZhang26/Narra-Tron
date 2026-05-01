@@ -102,6 +102,7 @@ Open [pi/main.py](pi/main.py) and set these three values at the top:
 
 ```python
 SSID = "your_wifi_network"
+from picamera2.previews import previews
 PASSWORD = "your_wifi_password"
 CAMERA_HOST = "192.168.x.x"  # IP of the Pi running camera.py
 ```

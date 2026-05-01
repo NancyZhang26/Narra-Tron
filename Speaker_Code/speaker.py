@@ -28,3 +28,4 @@ class Speaker:
         """Return True if aplay can enumerate at least one audio device."""
         result = subprocess.run(["aplay", "-l"], capture_output=True)
         return result.returncode == 0
+        

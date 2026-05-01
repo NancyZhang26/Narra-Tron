@@ -82,33 +82,47 @@ def capture_and_narrate(speaker: Speaker) -> None:
         speaker.play(result.get("audio_path", ""))
 
 
-def send_turn_page_to_pico():
+def send_turn_page_to_pico(max_attempts=15, base_delay=3):
     if not PICO_HOST:
         print("PICO_HOST not set — skipping TURN_PAGE signal")
         return
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with socket.create_connection((PICO_HOST, PICO_PORT), timeout=5) as sock:
+                sock.sendall(b"TURN_PAGE\n")
+                sock.settimeout(10)  # motors take ~1.4 s; 10 s is generous
+                ack = sock.recv(64)
+                if b"ACK" not in ack:
+                    raise RuntimeError(f"Expected ACK from Pico, got: {ack!r}")
+            print(f"TURN_PAGE acknowledged by Pico at {PICO_HOST}:{PICO_PORT}")
+            return
+        except (OSError, socket.timeout) as e:
+            delay = min(base_delay * attempt, 30)
+            if attempt < max_attempts:
+                print(f"[{attempt}/{max_attempts}] Pico not ready ({e}), retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                raise RuntimeError(
+                    f"Could not reach Pico at {PICO_HOST}:{PICO_PORT} after {max_attempts} attempts: {e}"
+                )
+
+
+def wait_for_page_turned(srv, timeout=300):
+    """Block until the Pico sends its PAGE_TURNED HTTP notification.
+
+    Raises RuntimeError after `timeout` seconds so the main loop can retry
+    instead of hanging forever if the Pico disconnects mid-turn.
+    """
+    print(f"Waiting for PAGE_TURNED signal from Pico (timeout {timeout}s)...")
+    srv.settimeout(timeout)
     try:
-        with socket.create_connection((PICO_HOST, PICO_PORT), timeout=18000) as sock:
-            sock.sendall(b"TURN_PAGE\n")
-            sock.settimeout(10)  # motors take ~1.4 s; 10 s is generous
-            ack = sock.recv(64)
-            if b"ACK" not in ack:
-                raise RuntimeError(f"Expected ACK from Pico, got: {ack!r}")
-        print(f"TURN_PAGE acknowledged by Pico at {PICO_HOST}:{PICO_PORT}")
+        conn, addr = srv.accept()
     except socket.timeout:
         raise RuntimeError(
-            f"Pico at {PICO_HOST}:{PICO_PORT} did not ACK TURN_PAGE within timeout — "
-            "check that the Pico is powered on and connected to WiFi"
+            f"Timed out waiting {timeout}s for PAGE_TURNED — Pico may have disconnected"
         )
-    except OSError as e:
-        raise RuntimeError(
-            f"ERROR: Could not reach Pico at {PICO_HOST}:{PICO_PORT}: {e}"
-        )
-
-
-def wait_for_page_turned(srv):
-    """Block until the Pico sends its PAGE_TURNED HTTP notification."""
-    print("Waiting for PAGE_TURNED signal from Pico...")
-    conn, addr = srv.accept()
+    finally:
+        srv.settimeout(None)
     with conn:
         conn.recv(1024)
         # Send a complete HTTP response so MicroPython's urequests client
@@ -142,6 +156,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
             wait_for_page_turned(srv)
         except RuntimeError as e:
             print(f"ERROR: {e}")
+            time.sleep(5)  # back off before retrying to avoid hot-spinning
 
     print("Shutting down.")
     picam2.stop()

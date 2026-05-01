@@ -20,6 +20,16 @@
         <section class="card error">{{ error }}</section>
         {% endif %}
 
+        <section class="card book-controls">
+            <h2>Book Pipeline</h2>
+            <p>Stops the live preview, acquires the camera at full resolution, and begins narrating pages.</p>
+            <div class="book-btn-row">
+                <button class="btn-start-book" onclick="startBook()">&#9654; Start Book</button>
+                <button class="btn-stop-book" onclick="stopBook()">&#9632; Stop</button>
+            </div>
+            <p id="book-status" class="book-status"></p>
+        </section>
+
         <section class="card camera-preview">
             <h2>Camera Preview <small>(5 fps — for orientation)</small></h2>
             <img src="/camera/stream" alt="Live camera feed" id="camera-img" />
@@ -89,6 +99,22 @@
         </section>
         {% endif %}
     </main>
+    <script>
+        async function startBook() {
+            document.getElementById('book-status').textContent = 'Starting...';
+            const res = await fetch('/book/start', { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('book-status').textContent =
+                res.ok ? 'Running (PID ' + data.pid + ')' : 'Error: ' + data.detail;
+        }
+        async function stopBook() {
+            document.getElementById('book-status').textContent = 'Stopping...';
+            const res = await fetch('/book/stop', { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('book-status').textContent =
+                res.ok ? 'Stopped (' + data.status + ')' : 'Error: ' + data.detail;
+        }
+    </script>
 </body>
 
 </html>
