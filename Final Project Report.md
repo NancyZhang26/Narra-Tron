@@ -31,22 +31,56 @@ As detailed as possible.
 
 ### 3.2 Hardware Components
 
-| Component           | Description     | Quantity |
-| ------------------- | --------------- | -------- |
-| Raspberry Pi pico w | Main controller | 1        |
-| Sensor / Module     | Purpose         | X        |
-| Power Supply        | Rating          | 1        |
+| Component                    | Description                                    | Quantity |
+| ---------------------------- | ---------------------------------------------- | -------- |
+| Raspberry Pi Pico W          | Main controller for page turning mechanism     | 1        |
+| Raspberry Pi 4               | Main processing unit (camera, OCR, TTS)        | 1        |
+| Pi Camera Module             | Image capture for page scanning                | 1        |
+| 3D Printed Roller & Finger   | Page turning mechanism                         | 1        |
+| 3D Printed Camera Mount      | Camera mounting bracket                        | 1        |
+| Motor (servo/stepper)        | Actuation for page turning                     | 2        |
+| Power Supply (USB-C)         | Power for Raspberry Pi                         | 1        |
+| Power Supply (micro-USB)     | Power for Pi Pico                              | 1        |
 
 - Schematic
 
 ### 3.3 Software Components
 
-- Libraries / Frameworks
-- Software structure
-  - code structure
-- Data flow
-- User interface
-- Communication Protocols (e.g., I2C, SPI, MQTT)
+- **Libraries / Frameworks**
+  - Backend API: FastAPI, Uvicorn, Pydantic, Jinja2, python-multipart
+  - Core processing: Pillow, pytesseract (OCR), Piper (TTS engine + ONNX voice model), faster-whisper (STT, optional)
+  - Hardware/runtime: picamera2 (Pi camera capture), requests (Pi-side HTTP client), MicroPython `urequests` (Pico-side HTTP notify), `socket` (Pi<->Pico signaling)
+  - Environment/tooling: python-dotenv, pytest, systemd service units, Docker (Linux dev container)
+
+- **Software Structure (code structure)**
+  - `src/narratron/api.py`: FastAPI routes for UI + API endpoints, camera preview/control routes, and process launch/stop helpers.
+  - `src/narratron/pipeline.py`: OCR -> TTS -> command parsing pipeline orchestration.
+  - `src/narratron/services/`: modular services (`ocr.py`, `tts.py`, `stt.py`, `protocol.py`).
+  - `pi/camera.py`: Pi capture loop, API submission, audio playback, and turn-page coordination.
+  - `pi/main.py`: Pico W motor control + network listener/ack behavior.
+  - `Speaker_Code/speaker.py`: blocking WAV playback (`aplay`) to guarantee narration completes before page turn.
+
+- **Data Flow**
+  1. Pi camera captures a full-resolution page image.
+  2. The image is submitted to the FastAPI endpoint and processed twice (left half, right half).
+  3. OCR extracts text and TTS generates `.wav` output per half-page.
+  4. Audio is played locally on the Pi speaker in blocking mode.
+  5. After both halves are narrated, Pi sends `TURN_PAGE` to Pico and waits for acknowledgment.
+  6. Pico turns the page, then notifies the Pi camera loop that `PAGE_TURNED`, and the cycle repeats.
+
+- **User Interface**
+  - Browser UI served by FastAPI + Jinja templates (`templates/index.html`) with static assets in `static/`.
+  - Supports image upload, OCR/TTS test run, transcript parsing, and audio playback in browser.
+  - Also exposes JSON API routes (health, pipeline process-page, STT parse/transcribe) for programmatic control.
+
+- **Communication Protocols**
+  - **HTTP/REST + JSON** on the Pi side:
+    - `pi/camera.py` -> FastAPI (`/v1/pipeline/process-page`) via HTTP POST JSON.
+    - Pico (`pi/main.py`, `urequests`) -> Pi camera listener via HTTP POST notification after page turn.
+  - **Raw TCP socket protocol** for page-turn command:
+    - Pi -> Pico sends `TURN_PAGE\n` on port 9999.
+    - Pico -> Pi returns `ACK\n` only after motor action is complete.
+  - This handshake ensures software narration and physical page-turn actions stay synchronized.
 
 ### 3.4 Overall Control Flow
 
@@ -62,8 +96,9 @@ As detailed as possible.
 
 Explain your (recorded) demo:
 
-- How the system works in real time
-- Key highlights
+1. At any given page, we always want to read what's already there immediately. So the camera will first take a picture of the page, divide it into 2, and then feed both of these images into our OCR and TTS model.
+2. All taken images, processed texts, and outputted .wav files are stored for further use. But immediately, the speaker will begin to play the proper .wav file of the current page.
+3. Once the speaker has finished, the Raspberry Pi will send a HTTP POST request to the Pico (which is acting as the server). The pico receives it, makes sure it is actually a "TURN_PAGE" request, and then activates the motors. Then it will send an ACK back to Raspberry Pi, which, upon receiving it, will continue through the process again (see step 1).
 
 ## 6. Contributions
 
@@ -71,7 +106,7 @@ List each member’s contributions:
 
 - Nancy: Protocol that transmits HTTP requests and responses between the speaker (pi), page turner hardware (3-D printed) (pico), and camera (pi). Camera preview + Camera code.
 - Pierce:
-- Wenli:
+- Wenli: 3D printed roller and page turning finger, and cradle for book. Ensured proper Raspberry Pico calibration to have a perfect page turning mechanism. Helped integration between Pi and Pico handshake
 - Max:
 
 ## 7.Conclusion
@@ -79,11 +114,10 @@ List each member’s contributions:
 Summarize:
 
 - What you built
-- What you learned: **_Software efficiency is inevitably tied with hardware limitations._**
-- Overall success of the project: Got a working MVP. Yeppie!
+- What you learned: **_Software efficiency is inevitably tied with hardware limitations._** We've also learned a lot about what it takes to manage many aspects of a project. Since we were acting as both project managers but also engineers, we needed to figure out how to properly switch between these roles. For example, we can't be too ambitious of our project if it becomes too technically challenging, and we also need to be flexible and change plans if something does or does not work as intended.
+- Overall success of the project: Got a working MVP. Yeppie! While there were certain parts of the project that were not cleaned up as hoped, having a working MVP was the ultimate goal and we are all very proud of our progress
 
 ## References
 
-- Datasheets
-- Research papers
-- Projects you get ideas from - GitHub repositories
+This is our main reference, all other aspects of our project were original ideas (besides usage of libraries)
+- https://youtu.be/WpUmWCApFB4?si=A3__Mp2LVR_-77XB
