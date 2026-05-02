@@ -34,7 +34,7 @@ As detailed as possible.
 | Component                    | Description                                    | Quantity |
 | ---------------------------- | ---------------------------------------------- | -------- |
 | Raspberry Pi Pico W          | Main controller for page turning mechanism     | 1        |
-| Raspberry Pi 4               | Main processing unit (camera, OCR, TTS)        | 1        |
+| Raspberry Pi 5               | Main processing unit (camera, OCR, TTS)        | 1        |
 | Pi Camera Module             | Image capture for page scanning                | 1        |
 | 3D Printed Roller & Finger   | Page turning mechanism                         | 1        |
 | 3D Printed Camera Mount      | Camera mounting bracket                        | 1        |
@@ -107,7 +107,7 @@ List each member’s contributions:
 - Nancy: Protocol that transmits HTTP requests and responses between the speaker (pi), page turner hardware (3-D printed) (pico), and camera (pi). Camera preview + Camera code.
 - Pierce:
 - Wenli: 3D printed roller and page turning finger, and cradle for book. Ensured proper Raspberry Pico calibration to have a perfect page turning mechanism. Helped integration between Pi and Pico handshake
-- Max:
+- Max: Designed and printed Pi mount. Built book-to-audio service pipeline: paddle OCR for extracting page text, TTS with piper running local model on Pi 5, local webapp for debugging.  
 
 ## 7.Conclusion
 
