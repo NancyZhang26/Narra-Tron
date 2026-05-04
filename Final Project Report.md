@@ -104,7 +104,7 @@ Explain your (recorded) demo:
 List each member’s contributions:
 
 - Nancy: Protocol that transmits HTTP requests and responses between the speaker (pi), page turner hardware (3-D printed) (pico), and camera (pi). Camera preview + Camera code.
-- Pierce:
+- Pierce: Camera code and speaker code on the pi. Working the camera preview as well as the camera scans. Ensuring the speaker ouptuts audio from the scanned image and stops when it reaches the end of the text file to send a signal to the Pico
 - Wenli: 3D printed roller and page turning finger, and cradle for book. Ensured proper Raspberry Pico calibration to have a perfect page turning mechanism. Helped integration between Pi and Pico handshake
 - Max: Designed and printed Pi mount. Built book-to-audio service pipeline: paddle OCR for extracting page text, TTS with piper running local model on Pi 5, local webapp for debugging.  
 
