@@ -21,12 +21,15 @@ Our final result is a working page turning robot which outputs the audio of each
 
 ## 3. Project Details
 
-Describe the details of your project
+Narra-Tron as a whole is an embedded system which simulates reading through the use of AI intelligence and creative modeling. It does this by scanning images of pages from books, processing them into readable text for the computer to undersatnd, converts that readable text into audio, and finally emits that audio through a speaker. Once that process is complete, the mount turns to the next page to repeat this process.
 
 ### 3.1 Project Description
 
 High-level description of the system.
 As detailed as possible.
+The process begins with the user placing their book into the physical mount provided. Once the book is put in place, the camera module planted above the mount captures a high-res scan of the two current book pages. Since the book will be open to two pages, the internal processor splits the scan into the two pages and sends them through to the OCR. From here, we use `pytesseract` to extract the raw text and send that to our TTS engine with Piper. The TTS generates `.wav` audio files that are played through the Raspberry Pi. 
+
+Once the Pi is done reading from the two pages, it sends a signal to the Raspberry Pico to flip the page, which it does with two motors connected with 3D prints to lift and flip the page. When the page is flipped, the Pico sends a corresponding signal back to the Pi to repeat this process, which it does until the book has finished.
 
 ### 3.2 Hardware Components
 
